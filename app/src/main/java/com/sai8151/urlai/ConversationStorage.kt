@@ -9,7 +9,6 @@ class ConversationStorage(context: Context) {
     private val prefs = context.getSharedPreferences("chat_storage", Context.MODE_PRIVATE)
     private val gson = Gson()
     private val KEY = "conversations"
-
     fun upsertConversation(conversation: Conversation) {
 
         val list = getConversations().toMutableList()
