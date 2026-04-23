@@ -129,21 +129,106 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnSend.setOnClickListener {
 
-            val text = binding.etMessage.text?.toString()?.trim() ?: ""
-            if (text.isEmpty()) return@setOnClickListener
+            val text = binding.etMessage.text
+                ?.toString()
+                ?.trim() ?: ""
 
-            binding.etMessage.setText("")
+            if (text.isEmpty()) {
+                return@setOnClickListener
+            }
 
             lifecycleScope.launch {
+                val selectedModel = prefs.selectedModel.first()
+
+                // No model selected
+                if (selectedModel.isBlank()) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Please select a model in Settings",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    return@launch
+                }
+
+                val isLocal =
+                    com.sai8151.urlai.ai.LocalModelRegistry
+                        .isLocalModel(selectedModel)
+
+                // Local model but not downloaded
+                if (isLocal) {
+                    val downloaded =
+                        com.sai8151.urlai.ai.ModelManager
+                            .isModelDownloaded(this@MainActivity)
+
+                    if (!downloaded) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Please download the model first",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@launch
+                    }
+                }
+
+                binding.etMessage.setText("")
                 viewModel.sendMessage(text)
             }
         }
+
         binding.etMessage.setOnEditorActionListener { _, _, _ ->
             binding.btnSend.performClick()
             true
         }
     }
+    override fun onResume() {
+        super.onResume()
 
+        updateSendButtonState(
+            PreferencesManager(this)
+        )
+    }
+    private fun updateSendButtonState(
+        prefs: PreferencesManager
+    ) {
+        lifecycleScope.launch {
+            try {
+                val selectedModel = prefs.selectedModel.first()
+
+                var shouldLookDisabled = false
+
+                // No model selected
+                if (selectedModel.isBlank()) {
+                    shouldLookDisabled = true
+                } else {
+                    val isLocal =
+                        com.sai8151.urlai.ai.LocalModelRegistry
+                            .isLocalModel(selectedModel)
+
+                    if (isLocal) {
+                        val downloaded =
+                            com.sai8151.urlai.ai.ModelManager
+                                .isModelDownloaded(this@MainActivity)
+
+                        if (!downloaded) {
+                            shouldLookDisabled = true
+                        }
+                    }
+                }
+
+                // Keep clickable for toast handling
+                binding.btnSend.isEnabled = true
+
+                binding.btnSend.alpha =
+                    if (shouldLookDisabled) 0.5f else 1f
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+
+                binding.btnSend.isEnabled = true
+                binding.btnSend.alpha = 0.5f
+            }
+        }
+    }
     // MENU
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
