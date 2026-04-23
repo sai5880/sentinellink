@@ -17,10 +17,8 @@ class ConversationStorage(context: Context) {
         val index = list.indexOfFirst { it.id == conversation.id }
 
         if (index != -1) {
-            // ✅ update existing (DO NOT move position)
             list[index] = conversation
         } else {
-            // ✅ add new normally
             list.add(conversation)
         }
 
@@ -32,8 +30,6 @@ fun getConversations(): List<Conversation> {
     val type = object : TypeToken<List<Conversation>>() {}.type
 
     val list: List<Conversation> = gson.fromJson(json, type)
-
-    // 🔥 SORT BY TIMESTAMP (LATEST FIRST)
     return list.sortedByDescending { it.timestamp }
 }
     fun deleteConversation(id: String) {
