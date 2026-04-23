@@ -21,6 +21,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: ChatAdapter
     private lateinit var convAdapter: ConversationAdapter
     private lateinit var storage: ConversationStorage
+    private var isSending = false
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -126,59 +127,61 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-
         binding.btnSend.setOnClickListener {
-
-            val text = binding.etMessage.text
-                ?.toString()
-                ?.trim() ?: ""
-
-            if (text.isEmpty()) {
-                return@setOnClickListener
-            }
-
-            lifecycleScope.launch {
-                val selectedModel = prefs.selectedModel.first()
-
-                // No model selected
-                if (selectedModel.isBlank()) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        "Please select a model in Settings",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    return@launch
-                }
-
-                val isLocal =
-                    com.sai8151.urlai.ai.LocalModelRegistry
-                        .isLocalModel(selectedModel)
-
-                // Local model but not downloaded
-                if (isLocal) {
-                    val downloaded =
-                        com.sai8151.urlai.ai.ModelManager
-                            .isModelDownloaded(this@MainActivity)
-
-                    if (!downloaded) {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "Please download the model first",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                        return@launch
-                    }
-                }
-
-                binding.etMessage.setText("")
-                viewModel.sendMessage(text)
-            }
+            handleSendMessage(prefs)
         }
+//        binding.btnSend.setOnClickListener {
+//
+//            val text = binding.etMessage.text
+//                ?.toString()
+//                ?.trim() ?: ""
+//
+//            if (text.isEmpty()) {
+//                return@setOnClickListener
+//            }
+//
+//            lifecycleScope.launch {
+//                val selectedModel = prefs.selectedModel.first()
+//
+//                // No model selected
+//                if (selectedModel.isBlank()) {
+//                    Toast.makeText(
+//                        this@MainActivity,
+//                        "Please select a model in Settings",
+//                        Toast.LENGTH_SHORT
+//                    ).show()
+//                    return@launch
+//                }
+//
+//                val isLocal =
+//                    com.sai8151.urlai.ai.LocalModelRegistry
+//                        .isLocalModel(selectedModel)
+//
+//                // Local model but not downloaded
+//                if (isLocal) {
+//                    val downloaded =
+//                        com.sai8151.urlai.ai.ModelManager
+//                            .isModelDownloaded(this@MainActivity)
+//
+//                    if (!downloaded) {
+//                        Toast.makeText(
+//                            this@MainActivity,
+//                            "Please download the model first",
+//                            Toast.LENGTH_SHORT
+//                        ).show()
+//                        return@launch
+//                    }
+//                }
+//
+//                binding.etMessage.setText("")
+//                viewModel.sendMessage(text)
+//            }
+//        }
 
-        binding.etMessage.setOnEditorActionListener { _, _, _ ->
-            binding.btnSend.performClick()
-            true
-        }
+//        binding.etMessage.setOnEditorActionListener { _, _, _ ->
+//            binding.btnSend.performClick()
+//            true
+//        }
     }
     override fun onResume() {
         super.onResume()
@@ -229,6 +232,61 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+    private fun handleSendMessage(
+        prefs: PreferencesManager
+    ) {
+        if (isSending) return
+
+        val text = binding.etMessage.text
+            ?.toString()
+            ?.trim() ?: ""
+
+        if (text.isEmpty()) return
+
+        lifecycleScope.launch {
+            try {
+                val selectedModel = prefs.selectedModel.first()
+
+                if (selectedModel.isBlank()) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Please select a model in Settings",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    return@launch
+                }
+
+                val isLocal =
+                    com.sai8151.urlai.ai.LocalModelRegistry
+                        .isLocalModel(selectedModel)
+
+                if (isLocal) {
+                    val downloaded =
+                        com.sai8151.urlai.ai.ModelManager
+                            .isModelDownloaded(this@MainActivity)
+
+                    if (!downloaded) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Please download the model first",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@launch
+                    }
+                }
+
+                isSending = true
+
+                binding.etMessage.setText("")
+                viewModel.sendMessage(text)
+
+            } finally {
+                isSending = false
+            }
+        }
+    }
+
     // MENU
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
