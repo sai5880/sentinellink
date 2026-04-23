@@ -127,7 +127,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ✅ SEND BUTTON (NEW)
         binding.btnSend.setOnClickListener {
 
             val text = binding.etMessage.text?.toString()?.trim() ?: ""

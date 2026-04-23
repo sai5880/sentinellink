@@ -5,7 +5,7 @@ import com.google.ai.edge.litertlm.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-
+import com.sai8151.urlai.PreferencesManager
 class LiteRtClient(
     private val context: Context,
     private val modelName: String,
@@ -120,7 +120,13 @@ class LiteRtClient(
                 firstLatency = firstLatency,
                 totalTime = totalTime
             )
+            val prefs = PreferencesManager(context)
 
+            prefs.saveMetrics(
+                tps = metrics.tps,
+                latency = metrics.firstLatency.toLong(),
+                total = metrics.totalTime.toLong()
+            )
             return@withContext Triple(
                 responseBuilder.toString(),
                 stats,

@@ -102,21 +102,33 @@ class SettingsActivity : AppCompatActivity() {
                     val latency = prefs.lastLatency.first()
                     val total = prefs.lastTotal.first()
 
-                    binding.tvPerformance.text = """
-                        Performance:
-                        TPS: %.2f
-                        First Token: %d ms
-                        Total: %d ms
-                    """.trimIndent().format(tps, latency, total)
+                    if (tps > 0 && latency > 0 && total > 0) {
 
-                    val metrics = PerfMetrics(
-                        tps = tps.toDouble(),
-                        firstLatency = latency,
-                        totalTime = total
-                    )
+                        binding.tvPerformance.text = """
+        Performance:
+        TPS: %.2f
+        First Token: %d ms
+        Total: %d ms
+    """.trimIndent().format(tps, latency, total)
 
-                    val rec = DeviceRecommender.getRecommendation(metrics)
-                    binding.tvRecommendation.text = "${rec.label} → ${rec.description}"
+                        val metrics = PerfMetrics(
+                            tps = tps.toDouble(),
+                            firstLatency = latency,
+                            totalTime = total
+                        )
+
+                        val rec = DeviceRecommender.getRecommendation(metrics)
+
+                        binding.tvRecommendation.text =
+                            "${rec.label} → ${rec.description}"
+
+                    } else {
+                        binding.tvPerformance.text =
+                            "Performance: Not measured yet"
+
+                        binding.tvRecommendation.text =
+                            "Recommendation: Run local model once to generate metrics"
+                    }
 
                 } else {
                     binding.tvPerformance.text = "Performance: N/A (Cloud model)"
@@ -154,7 +166,7 @@ class SettingsActivity : AppCompatActivity() {
                     contextSize = if (isLocal) contextSize else 3
                 )
 
-                Toast.makeText(this@SettingsActivity, "Settings saved!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@SettingsActivity, "Settings saved", Toast.LENGTH_SHORT).show()
                 finish()
             }
         }

@@ -1,5 +1,6 @@
 package com.sai8151.urlai
 
+import android.annotation.SuppressLint
 import android.util.Log
 import android.view.*
 import android.widget.*
@@ -50,6 +51,7 @@ class ConversationAdapter(
 
     override fun getItemCount() = list.size
 
+    @SuppressLint("NotifyDataSetChanged")
     fun update(newList: List<Conversation>) {
         list = newList
         notifyDataSetChanged()
