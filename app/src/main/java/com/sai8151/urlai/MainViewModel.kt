@@ -50,7 +50,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun loadConversation(conv: Conversation) {
         activeSessionId = conv.id
-        currentConversationId = conv.id   // 🔥 MUST
+        currentConversationId = conv.id
 
         _chatMessages.value = conv.messages.toList()
 
