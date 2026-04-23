@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0F0F0F"
+    android:fitsSystemWindows="true">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@android:color/transparent"
+        android:title="Settings"
+        android:titleTextColor="#FFFFFF"
+        android:clickable="true"
+        android:focusable="true"
+        app:navigationIcon="@drawable/ic_arrow_back"
+        app:navigationIconTint="#FFFFFF"/>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="?attr/actionBarSize">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Target Endpoint"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:layout_marginBottom="8dp"/>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Target URL"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#F44336"
+                app:hintTextColor="#F44336">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etUrl"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#FFFFFF"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Authentication"
+                android:visibility="gone"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp"/>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Gemini API Key"
+                android:visibility="gone"
+                app:endIconMode="password_toggle"
+                app:endIconTint="#FFFFFF"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#F44336"
+                app:hintTextColor="#F44336">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etGeminiKey"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="Claude API Key"
+                android:visibility="gone"
+                app:endIconMode="password_toggle"
+                app:endIconTint="#FFFFFF"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#F44336"
+                app:hintTextColor="#F44336">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etClaudeKey"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="OpenAI API Key"
+                android:visibility="gone"
+                app:endIconMode="password_toggle"
+                app:endIconTint="#FFFFFF"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#F44336"
+                app:hintTextColor="#F44336">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etOpenAiKey"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Model Tuning"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp"/>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Temperature"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#F44336"
+                app:hintTextColor="#F44336">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etTemperature"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberDecimal"
+                    android:textColor="#FFFFFF"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="Top K"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#F44336"
+                app:hintTextColor="#F44336">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etTopK"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:textColor="#FFFFFF"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="Top P"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#F44336"
+                app:hintTextColor="#F44336">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etTopP"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberDecimal"
+                    android:textColor="#FFFFFF"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="Context Size"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#F44336"
+                app:hintTextColor="#F44336">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etContext"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:textColor="#FFFFFF"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:boxStrokeColor="#F44336"
+                app:hintTextColor="#F44336"
+                android:hint="Select Model">
+
+                <AutoCompleteTextView
+                    android:id="@+id/spinnerModel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none"
+                    android:textColor="#FFFFFF"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="System Prompt"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#F44336"
+                app:hintTextColor="#F44336">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etSystemPrompt"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minLines="3"
+                    android:gravity="top"
+                    android:textColor="#FFFFFF"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <ProgressBar
+                android:id="@+id/progressDownload"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="12dp"
+                android:progressTint="#F44336"
+                android:indeterminateTint="#F44336"/>
+
+            <TextView
+                android:id="@+id/tvPerformance"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Performance: -"
+                android:textColor="#FFFFFF"
+                android:layout_marginTop="8dp"/>
+
+            <TextView
+                android:id="@+id/tvRecommendation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Recommendation: -"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:layout_marginTop="4dp"/>
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switchGpu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Use GPU"
+                android:textColor="#FFFFFF"
+                android:layout_marginTop="16dp"
+                app:thumbTint="#F44336"
+                app:trackTint="#88070707"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDownloadModel"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="12dp"
+                android:text="Download Model"
+                app:cornerRadius="20dp"
+                app:backgroundTint="#FF8179"
+                android:textColor="#FFFFFF"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSave"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="24dp"
+                android:text="Save &amp; Apply"
+                android:textColor="#FFFFFF"
+                app:backgroundTint="#FF5B52"
+                app:cornerRadius="24dp"/>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
