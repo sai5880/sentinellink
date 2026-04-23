@@ -154,7 +154,7 @@ class SettingsActivity : AppCompatActivity() {
                     contextSize = if (isLocal) contextSize else 3
                 )
 
-                Toast.makeText(this@SettingsActivity, "Settings saved!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@SettingsActivity, "Settings saved", Toast.LENGTH_SHORT).show()
                 finish()
             }
         }
