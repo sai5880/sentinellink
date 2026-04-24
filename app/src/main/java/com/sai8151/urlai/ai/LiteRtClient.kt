@@ -2,10 +2,10 @@ package com.sai8151.urlai.ai
 
 import android.content.Context
 import com.google.ai.edge.litertlm.*
+import com.sai8151.urlai.PreferencesManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
-import com.sai8151.urlai.PreferencesManager
+
 class LiteRtClient(
     private val context: Context,
     private val modelName: String,
@@ -22,6 +22,14 @@ class LiteRtClient(
         private var engine: Engine? = null
         private var loadedModelPath: String? = null
         private var conversation: Conversation? = null
+
+        /**
+         * EASY SWITCH
+         *
+         * true  -> streaming ON
+         * false -> streaming OFF
+         */
+        private const val ENABLE_STREAMING = false
     }
 
     override suspend fun chat(
@@ -44,10 +52,15 @@ class LiteRtClient(
 
             val modelPath = file.absolutePath
 
+            // Reload engine only if needed
             if (engine == null || loadedModelPath != modelPath) {
                 engine?.close()
 
-                val backend = if (useGpu) Backend.GPU() else Backend.CPU()
+                val backend = if (useGpu) {
+                    Backend.GPU()
+                } else {
+                    Backend.CPU()
+                }
 
                 val config = EngineConfig(
                     modelPath = modelPath,
@@ -64,6 +77,7 @@ class LiteRtClient(
 
             val activeEngine = engine!!
 
+            // Create conversation only once
             if (conversation == null) {
                 conversation = activeEngine.createConversation(
                     ConversationConfig(
@@ -85,41 +99,83 @@ class LiteRtClient(
             var firstTokenTime: Long? = null
             var tokenCount = 0
 
-            conversation!!.sendMessageAsync(prompt)
-                .collect { msg ->
+            /**
+             * STREAMING MODE
+             */
+            if (ENABLE_STREAMING && onToken != null) {
 
-                    val text = msg.toString()
+                conversation!!
+                    .sendMessageAsync(prompt)
+                    .collect { msg ->
 
-                    if (text.isNotBlank()) {
+                        val text = msg.toString()
 
-                        if (firstTokenTime == null) {
-                            firstTokenTime = System.currentTimeMillis()
+                        if (text.isNotBlank()) {
+
+                            if (firstTokenTime == null) {
+                                firstTokenTime = System.currentTimeMillis()
+                            }
+
+                            responseBuilder.append(text)
+                            tokenCount++
+
+                            // Send token to UI
+                            onToken.invoke(text)
                         }
-
-                        responseBuilder.append(text)
-                        tokenCount++
-
-                        onToken?.invoke(text)
                     }
+
+            } else {
+
+                /**
+                 * NON-STREAMING MODE
+                 *
+                 * Wait for full response first
+                 * Better markdown rendering
+                 */
+                val fullResponse = conversation!!
+                    .sendMessage(prompt)
+                    .toString()
+
+                if (fullResponse.isNotBlank()) {
+
+                    firstTokenTime = System.currentTimeMillis()
+
+                    responseBuilder.append(fullResponse)
+
+                    // rough estimate
+                    tokenCount = fullResponse.length
+
+                    // Optional: send final full response once
+                    onToken?.invoke(fullResponse)
                 }
+            }
 
             val endTime = System.currentTimeMillis()
 
-            val firstLatency = firstTokenTime?.minus(startTime) ?: -1
-            val totalTime = endTime - startTime
-            val tps = if (totalTime > 0) (tokenCount * 1000.0 / totalTime) else 0.0
+            val firstLatency =
+                firstTokenTime?.minus(startTime) ?: -1
+
+            val totalTime =
+                endTime - startTime
+
+            val tps =
+                if (totalTime > 0)
+                    (tokenCount * 1000.0 / totalTime)
+                else
+                    0.0
 
             val stats = """
-            ⚡ ${"%.2f".format(tps)} tokens/sec
-            ⏱ First token: ${firstLatency} ms
-            ⏳ Total: ${totalTime} ms
-        """.trimIndent()
+                ⚡ ${"%.2f".format(tps)} tokens/sec
+                ⏱ First token: ${firstLatency} ms
+                ⏳ Total: ${totalTime} ms
+            """.trimIndent()
 
             val metrics = PerfMetrics(
                 tps = tps,
                 firstLatency = firstLatency,
                 totalTime = totalTime
             )
+
             val prefs = PreferencesManager(context)
 
             prefs.saveMetrics(
@@ -127,6 +183,7 @@ class LiteRtClient(
                 latency = metrics.firstLatency.toLong(),
                 total = metrics.totalTime.toLong()
             )
+
             return@withContext Triple(
                 responseBuilder.toString(),
                 stats,
@@ -141,6 +198,7 @@ class LiteRtClient(
             )
         }
     }
+
     fun resetConversation() {
         conversation?.close()
         conversation = null
@@ -152,11 +210,18 @@ class LiteRtClient(
     ): String {
         val sb = StringBuilder()
 
-        history.takeLast(maxHistory).forEach {
-            sb.append(it.first).append(": ").append(it.second).append("\n")
-        }
+        history
+            .takeLast(maxHistory)
+            .forEach {
+                sb.append(it.first)
+                    .append(": ")
+                    .append(it.second)
+                    .append("\n")
+            }
 
-        sb.append("User: ").append(userMessage).append("\nAssistant:")
+        sb.append("User: ")
+            .append(userMessage)
+            .append("\nAssistant:")
 
         return sb.toString()
     }
