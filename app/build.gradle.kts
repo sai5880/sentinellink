@@ -13,8 +13,8 @@ android {
         applicationId = "com.sai8151.urlai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.8"
+        versionCode = 10
+        versionName = "1.9"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -61,7 +61,7 @@ dependencies {
 
     implementation(libs.androidx.datastore.core.android)
     implementation(libs.androidx.datastore.preferences)
-
+    implementation(libs.pdfbox.android)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(libs.androidx.recyclerview)
