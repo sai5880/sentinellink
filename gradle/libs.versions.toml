@@ -21,6 +21,7 @@ materialVersion = "1.9.0"
 okhttp = "5.3.2"
 datastoreCoreAndroid = "1.2.1"
 appcompat = "1.7.1"
+pdfboxAndroid = "2.0.27.0"
 playServicesMlkitGenaiPrompt = "<latest-version>"
 prism4j = "2.0.0"
 prism4jBundler = "2.0.0"
@@ -64,6 +65,7 @@ material-v190 = { module = "com.google.android.material:material", version.ref =
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 androidx-datastore-core-android = { group = "androidx.datastore", name = "datastore-core-android", version.ref = "datastoreCoreAndroid" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+pdfbox-android = { module = "com.tom-roush:pdfbox-android", version.ref = "pdfboxAndroid" }
 play-services-mlkit-genai-prompt = { module = "com.google.android.gms:play-services-mlkit-genai-prompt", version.ref = "playServicesMlkitGenaiPrompt" }
 prism4j = { module = "io.noties:prism4j", version.ref = "prism4j" }
 prism4j-bundler = { module = "io.noties:prism4j-bundler", version.ref = "prism4jBundler" }

@@ -1,13 +1,34 @@
 package com.sai8151.urlai
 
 import android.app.Application
+import android.net.Uri
 import android.util.Log
-import androidx.lifecycle.*
-import com.sai8151.urlai.ai.*
-import kotlinx.coroutines.*
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.viewModelScope
+import com.sai8151.urlai.ai.AiClient
+import com.sai8151.urlai.ai.AutoTuner
+import com.sai8151.urlai.ai.ClaudeClient
+import com.sai8151.urlai.ai.GeminiClient
+import com.sai8151.urlai.ai.LiteRtClient
+import com.sai8151.urlai.ai.LocalModelRegistry
+import com.sai8151.urlai.ai.OpenAiClient
+import com.sai8151.urlai.ai.TunedConfig
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.text.PDFTextStripper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 data class ChatMessage(
     val role: String,
@@ -192,6 +213,64 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _status.postValue("Error: ${e.message}")
         }
     }
+    suspend fun handlePdfImport(uri: Uri) {
+        try {
+            if (currentConversationId == null) {
+                currentConversationId = System.currentTimeMillis().toString()
+            }
+
+            withContext(Dispatchers.Main) {
+                _status.value = "Reading PDF..."
+            }
+
+            val extractedText = extractTextFromPdf(uri)
+
+            if (extractedText.isBlank()) {
+                _status.postValue("PDF is empty")
+                return
+            }
+
+            val finalPrompt = """
+            Analyze this PDF content and provide a useful response.
+
+            PDF Content:
+            
+            $extractedText
+        """.trimIndent()
+
+            sendMessage(finalPrompt)
+
+        } catch (e: Exception) {
+            _status.postValue("PDF Error: ${e.message}")
+        }
+    }
+
+    private suspend fun extractTextFromPdf(uri: Uri): String =
+        withContext(Dispatchers.IO) {
+
+            try {
+                val context = getApplication<Application>()
+
+                PDFBoxResourceLoader.init(context)
+
+                context.contentResolver.openInputStream(uri).use { inputStream ->
+
+                    if (inputStream == null) return@withContext ""
+
+                    val document = PDDocument.load(inputStream)
+                    val stripper = PDFTextStripper()
+
+                    val text = stripper.getText(document)
+
+                    document.close()
+
+                    text.take(15000) // prevent huge prompts
+                }
+
+            } catch (e: Exception) {
+                ""
+            }
+        }
     fun startPolling() {
         if (pollingJob?.isActive == true) return
 

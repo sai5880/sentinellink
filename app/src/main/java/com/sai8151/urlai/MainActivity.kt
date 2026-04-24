@@ -6,6 +6,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
@@ -14,7 +15,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.sai8151.urlai.databinding.ActivityMainBinding
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-
+import androidx.activity.result.contract.ActivityResultContracts
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
@@ -23,7 +24,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: ChatAdapter
     private lateinit var convAdapter: ConversationAdapter
     private lateinit var storage: ConversationStorage
-
+    private lateinit var pdfPickerLauncher: ActivityResultLauncher<Array<String>>
     private var isSending = false
     private var isActionPopupVisible = false
 
@@ -61,6 +62,31 @@ class MainActivity : AppCompatActivity() {
                 refreshSidebar()
             }
         )
+        pdfPickerLauncher = registerForActivityResult(
+            ActivityResultContracts.OpenDocument()
+        ) { uri ->
+
+            if (uri != null) {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+
+                Toast.makeText(
+                    this,
+                    "PDF Selected: $uri",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                lifecycleScope.launch {
+                    viewModel.handlePdfImport(uri)
+                }
+            }
+        }
+        binding.btnImportPdf.setOnClickListener {
+            pdfPickerLauncher.launch(arrayOf("application/pdf"))
+            closeActionPopup()
+        }
 
         binding.rvConversations.layoutManager =
             LinearLayoutManager(this)
@@ -224,15 +250,15 @@ class MainActivity : AppCompatActivity() {
         // Import PDF placeholder
         // ------------------------------------------------
 
-        binding.btnImportPdf.setOnClickListener {
-            Toast.makeText(
-                this,
-                "PDF import feature coming soon",
-                Toast.LENGTH_SHORT
-            ).show()
-
-            closeActionPopup()
-        }
+//        binding.btnImportPdf.setOnClickListener {
+//            Toast.makeText(
+//                this,
+//                "PDF import feature coming soon",
+//                Toast.LENGTH_SHORT
+//            ).show()
+//
+//            closeActionPopup()
+//        }
 
         // ------------------------------------------------
         // Send button
