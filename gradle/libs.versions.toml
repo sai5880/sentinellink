@@ -23,6 +23,8 @@ datastoreCoreAndroid = "1.2.1"
 appcompat = "1.7.1"
 playServicesMlkitGenaiPrompt = "<latest-version>"
 prism4j = "2.0.0"
+prism4jBundler = "2.0.0"
+prism4jBundlerAnnotations = "2.0.0"
 recyclerview = "1.4.0"
 tasksGenai = "0.10.33"
 material = "1.13.0"
@@ -64,6 +66,8 @@ androidx-datastore-core-android = { group = "androidx.datastore", name = "datast
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 play-services-mlkit-genai-prompt = { module = "com.google.android.gms:play-services-mlkit-genai-prompt", version.ref = "playServicesMlkitGenaiPrompt" }
 prism4j = { module = "io.noties:prism4j", version.ref = "prism4j" }
+prism4j-bundler = { module = "io.noties:prism4j-bundler", version.ref = "prism4jBundler" }
+prism4j-bundler-annotations = { module = "io.noties:prism4j-bundler-annotations", version.ref = "prism4jBundlerAnnotations" }
 syntax-highlight = { module = "io.noties.markwon:syntax-highlight", version.ref = "core" }
 tasks-genai = { module = "com.google.mediapipe:tasks-genai", version.ref = "tasksGenai" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }

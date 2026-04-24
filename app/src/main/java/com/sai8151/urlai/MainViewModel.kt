@@ -210,7 +210,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val model = prefs.selectedModel.first()
 
                 // ✅ Build client ONCE
-                aiClient = buildClient(model)
+                if (aiClient == null) {
+                    aiClient = buildClient(model)
+                }
 
                 if (aiClient == null) {
                     _status.postValue("Invalid API key / model.")

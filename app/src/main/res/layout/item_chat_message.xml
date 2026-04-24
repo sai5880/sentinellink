@@ -1,40 +1,82 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/llContainer"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="6dp"
+    android:paddingHorizontal="12dp"
+    android:paddingVertical="6dp"
     android:orientation="vertical">
 
+    <!-- Role label (User / AI) -->
+    <TextView
+        android:id="@+id/tvRole"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp"
+        android:layout_marginStart="4dp"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.08"
+        android:textColor="#888888" />
+
+    <!-- Bubble card -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/cardMessage"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:radius="12dp"
-        android:layout_margin="4dp">
+        android:layout_marginBottom="2dp"
+        app:cardCornerRadius="18dp"
+        app:cardElevation="0dp"
+        app:strokeWidth="0dp">
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="10dp">
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp">
 
-            <TextView
-                android:id="@+id/tvRole"
+            <!-- Content blocks go here via ViewGroup container -->
+            <LinearLayout
+                android:id="@+id/llContent"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="10sp"
-                android:textColor="#AAAAAA"/>
-
-            <TextView
-                android:id="@+id/tvContent"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"/>
+                android:orientation="vertical"
+                android:minWidth="40dp" />
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
+
+    <!-- Action toolbar (only shown for AI messages) -->
+    <LinearLayout
+        android:id="@+id/llToolbar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp"
+        android:layout_marginStart="4dp"
+        android:visibility="gone">
+
+        <!-- Copy full response -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCopyAll"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:text="Copy response"
+            android:textSize="11sp"
+            android:textColor="#AAAAAA"
+            android:paddingHorizontal="8dp"
+            app:icon="@drawable/ic_copy"
+            app:iconSize="14dp"
+            app:iconTint="#888888"
+            app:iconGravity="textStart"
+            app:iconPadding="4dp" />
+
+    </LinearLayout>
 
 </LinearLayout>

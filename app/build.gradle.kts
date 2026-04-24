@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    kotlin("kapt")
 }
 
 android {
@@ -12,8 +13,8 @@ android {
         applicationId = "com.sai8151.urlai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.7"
+        versionCode = 9
+        versionName = "1.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -85,8 +86,6 @@ dependencies {
         exclude(group = "org.jetbrains", module = "annotations-java5")
     }
 
-    implementation(libs.annotations)
-    implementation(libs.prism4j)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
