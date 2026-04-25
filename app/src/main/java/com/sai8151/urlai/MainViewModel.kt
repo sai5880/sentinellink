@@ -1,8 +1,17 @@
 package com.sai8151.urlai
 
 import android.app.Application
+import android.content.ContentValues
+import android.graphics.Bitmap
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.os.ParcelFileDescriptor
+import android.provider.MediaStore
+import android.util.Base64
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -26,6 +35,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -33,7 +44,7 @@ import java.util.Locale
 data class ChatMessage(
     val role: String,
     val content: String,
-    val stats: String? = null
+    val stats: String? = null,
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -43,6 +54,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun newSession() {
         activeSessionId = System.currentTimeMillis().toString()
     }
+
     private var currentConversationId: String? = null
     private val prefs = PreferencesManager(application)
     private val poller = UrlPoller()
@@ -69,6 +81,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         conversationHistory.clear()
         lastContent = ""
     }
+
     fun loadConversation(conv: Conversation) {
         activeSessionId = conv.id
         currentConversationId = conv.id
@@ -80,6 +93,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         lastContent = ""
     }
+
     private fun autoSaveConversation() {
 
         val messages = _chatMessages.value ?: return
@@ -100,6 +114,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Log.d("CHAT_DEBUG", "Saving ID: $id")
         storage.upsertConversation(conversation)
     }
+
     fun saveCurrentConversation() {
 
         val messages = _chatMessages.value ?: return
@@ -119,6 +134,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         storage.upsertConversation(conversation)
     }
+
     suspend fun sendMessage(userInput: String) {
 
         try {
@@ -213,6 +229,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _status.postValue("Error: ${e.message}")
         }
     }
+
     suspend fun handlePdfImport(uri: Uri) {
         try {
             if (currentConversationId == null) {
@@ -244,6 +261,417 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _status.postValue("PDF Error: ${e.message}")
         }
     }
+    @RequiresApi(Build.VERSION_CODES.Q)
+    suspend fun handlePdfToWordImport(uri: Uri) {
+        try {
+            if (currentConversationId == null) {
+                currentConversationId = System.currentTimeMillis().toString()
+            }
+
+            withContext(Dispatchers.Main) {
+                _status.value = "Processing PDF..."
+                // Post initial status bubble into chat
+                addMessage(ChatMessage("assistant", "📄 Starting PDF conversion..."))
+            }
+
+            val context = getApplication<Application>()
+            val model = prefs.selectedModel.first()
+            val isLocal = LocalModelRegistry.isLocalModel(model)
+
+            if (aiClient == null) {
+                aiClient = buildClient(model)
+            }
+
+            if (aiClient == null) {
+                updateLastMessage("No valid AI client. Check settings.")
+                return
+            }
+
+            val tempFile = File(context.cacheDir, "pdf_temp_${System.currentTimeMillis()}.pdf")
+            withContext(Dispatchers.IO) {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    tempFile.outputStream().use { output -> input.copyTo(output) }
+                }
+            }
+
+            val pageCount = withContext(Dispatchers.IO) {
+                val pfd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY)
+                val renderer = PdfRenderer(pfd)
+                val count = renderer.pageCount
+                renderer.close()
+                pfd.close()
+                count
+            }
+
+            updateLastMessage("Found **$pageCount pages**. Converting page by page...")
+
+            val allPageHtmls = mutableListOf<String>()
+
+            for (pageIndex in 0 until pageCount) {
+                val pageNum = pageIndex + 1
+
+                // Update the same bubble with current progress
+                val progress = buildProgressMessage(pageNum, pageCount, allPageHtmls.size)
+                updateLastMessage(progress)
+
+                val htmlChunk = withContext(Dispatchers.IO) {
+                    if (isLocal) {
+                        extractPageTextAndConvert(uri, pageIndex, pageNum)
+                    } else {
+                        renderPageAndConvertViaVision(tempFile, pageIndex, pageNum)
+                    }
+                }
+
+                allPageHtmls.add(htmlChunk)
+            }
+
+            tempFile.delete()
+
+            updateLastMessage("\nAll $pageCount pages converted. Building files...")
+
+            val fullHtml = buildFullHtml(allPageHtmls)
+            val htmlSaved = saveHtmlToDownloads(context, fullHtml)
+            val docxSaved = saveDocxToDownloads(context, allPageHtmls)
+
+            val resultMsg = buildString {
+                append("**PDF conversion complete!**\n\n")
+                append("$pageCount pages processed\n")
+                if (htmlSaved) append("HTML saved to Downloads\n")
+                if (docxSaved != null) append("DOC saved to Downloads\n")
+                if (!htmlSaved && docxSaved == null) append("Save failed — check storage permissions")
+                if (docxSaved != null) append("\n[DOCX_PATH:$docxSaved]")
+            }
+
+            withContext(Dispatchers.Main) {
+                updateLastMessage(resultMsg)
+                _status.value = "Done!"
+            }
+
+        } catch (e: Exception) {
+            updateLastMessage("PDF Conversion Error: ${e.message}")
+            _status.postValue("Error")
+            Log.e("PdfToWord", "Error", e)
+        }
+    }
+    // Builds the animated progress text shown in the chat bubble
+    private fun buildProgressMessage(current: Int, total: Int, done: Int): String {
+        val filled = (done.toFloat() / total * 20).toInt().coerceIn(0, 20)
+        val bar = "█".repeat(filled) + "░".repeat(20 - filled)
+        return "Converting PDF...\n\n" +
+                "[$bar] $done/$total\n\n" +
+                "Processing page $current of $total..."
+    }
+
+    // Updates the last message in the chat list in-place (no new bubble)
+    private fun updateLastMessage(text: String) {
+        val updated = _chatMessages.value?.toMutableList() ?: return
+        if (updated.isEmpty()) return
+        val lastIndex = updated.size - 1
+        updated[lastIndex] = updated[lastIndex].copy(content = text)
+        _chatMessages.postValue(updated)
+    }
+    // ─────────────────────────────────────────────────────────────
+// LOCAL PATH: extract text for one page → ask LLM → get HTML
+// ─────────────────────────────────────────────────────────────
+    private suspend fun extractPageTextAndConvert(
+        uri: Uri,
+        pageIndex: Int,
+        pageNum: Int
+    ): String {
+        return try {
+            val context = getApplication<Application>()
+
+            // Copy URI to temp file once
+            val tempFile = withContext(Dispatchers.IO) {
+                val file = File(context.cacheDir, "pdf_temp_${System.currentTimeMillis()}.pdf")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    file.outputStream().use { output -> input.copyTo(output) }
+                }
+                file
+            }
+
+            val imageBytes = withContext(Dispatchers.IO) {
+                val pfd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY)
+                val renderer = PdfRenderer(pfd)
+                val page = renderer.openPage(pageIndex)
+
+                val scale = minOf(1200f / page.width, 1200f / page.height, 2.0f)
+                val bitmap = Bitmap.createBitmap(
+                    (page.width * scale).toInt(),
+                    (page.height * scale).toInt(),
+                    Bitmap.Config.ARGB_8888  // ← ARGB_8888 not RGB_565, required by vision encoder
+                )
+                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                page.close()
+                renderer.close()
+                pfd.close()
+                tempFile.delete()
+
+                val baos = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, baos)
+                bitmap.recycle()
+                baos.toByteArray()
+            }
+
+            val prompt = """
+This is page $pageNum of a PDF document.
+Recreate this document EXACTLY as visually shown.
+
+Preserve:
+- exact table structure
+- borders
+- merged cells
+- text alignment
+- indentation
+- bold/italic
+- spacing
+- paragraph breaks
+- section hierarchy
+- line spacing
+- margins
+- page layout
+- headers
+- footers
+- signatures
+- underlines
+- stamps if visible
+
+Output complete production-grade HTML with inline CSS (Full HTML + inline CSS).
+
+Do not simplify.
+Do not summarize.
+Do not infer missing text.
+Reconstruct exact visual layout.
+
+Return only HTML body content.
+        """.trimIndent()
+
+            val systemPrompt = "You are a precise document formatter. Output only valid inner HTML."
+
+            val liteRtClient = aiClient as? LiteRtClient
+                ?: return "<p><em>Page $pageNum: local model required for vision</em></p>"
+
+            val (html, _, _) = liteRtClient.chatWithImage(
+                systemPrompt = systemPrompt,
+                imageBytes = imageBytes,
+                userMessage = prompt
+            )
+
+            stripToBodyContent(html)
+        } catch (e: Exception) {
+            "<p><em>Page $pageNum error: ${e.message}</em></p>"
+        }
+    }
+    // ─────────────────────────────────────────────────────────────
+    // CLOUD PATH: render page to PNG → base64 → vision prompt
+    // ─────────────────────────────────────────────────────────────
+    private suspend fun renderPageAndConvertViaVision(
+        pdfFile: File,
+        pageIndex: Int,
+        pageNum: Int,
+    ): String {
+        return try {
+            val base64Image = withContext(Dispatchers.IO) {
+                val pfd = ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY)
+                val renderer = PdfRenderer(pfd)
+                val page = renderer.openPage(pageIndex)
+
+                // Scale to max 1200px wide to balance quality vs token size
+                val scale = minOf(1200f / page.width, 1200f / page.height, 2.0f)
+                val bitmapWidth = (page.width * scale).toInt()
+                val bitmapHeight = (page.height * scale).toInt()
+
+                val bitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.RGB_565)
+                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                page.close()
+                renderer.close()
+                pfd.close()
+
+                // Compress to JPEG at 75% quality to reduce token usage
+                val baos = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 75, baos)
+                bitmap.recycle()
+
+                Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+            }
+
+            val prompt = """
+            This is page $pageNum of a PDF document rendered as an image.
+            Recreate this document EXACTLY as visually shown.
+
+Preserve:
+- exact table structure
+- borders
+- merged cells
+- text alignment
+- indentation
+- bold/italic
+- spacing
+- paragraph breaks
+- section hierarchy
+- line spacing
+- margins
+- page layout
+- headers
+- footers
+- signatures
+- underlines
+- stamps if visible
+- always give paragraphs as justified
+
+Output complete production-grade HTML with inline CSS (Full HTML + inline CSS).
+
+Do not simplify.
+Do not summarize.
+Do not infer missing text.
+Reconstruct exact visual layout.
+
+Return only HTML body content.
+IMAGE (base64 JPEG): data:image/jpeg;base64,$base64Image
+        """.trimIndent()
+
+            val systemPrompt = "You are a precise document formatter. Output only valid inner HTML."
+
+            val (html, _, _) = aiClient!!.chat(
+                systemPrompt = systemPrompt,
+                history = emptyList(),
+                userMessage = prompt,
+                onToken = null
+            )
+
+            stripToBodyContent(html)
+        } catch (e: Exception) {
+            "<p><em>Page $pageNum render error: ${e.message}</em></p>"
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+// Strip any accidental <html>/<body> wrapper from LLM output
+// ─────────────────────────────────────────────────────────────
+    private fun stripToBodyContent(raw: String): String {
+        val bodyRegex = Regex(
+            """<body[^>]*>(.*?)</body>""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
+        val extracted = bodyRegex.find(raw)?.groupValues?.get(1)?.trim()
+            ?: raw
+                .replace(Regex("""</?html[^>]*>""", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("""<head[^>]*>.*?</head>""",
+                    setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)), "")
+                .replace(Regex("""</?body[^>]*>""", RegexOption.IGNORE_CASE), "")
+                .trim()
+
+        // Collapse 3+ consecutive <br> or empty <p> tags into a single one
+        return extracted
+            .replace(Regex("""(<br\s*/?>[\s\n]*){3,}""", RegexOption.IGNORE_CASE), "<br>")
+            .replace(Regex("""(<p[^>]*>\s*</p>[\s\n]*){3,}""", RegexOption.IGNORE_CASE), "<p></p>")
+            .trim()
+    }
+
+    // ─────────────────────────────────────────────────────────────
+// Build complete HTML document
+// ─────────────────────────────────────────────────────────────
+    private fun buildFullHtml(pages: List<String>): String {
+        val sb = StringBuilder()
+        sb.append("""
+        <!DOCTYPE html><html><head><meta charset="UTF-8">
+        <style>
+  body { font-family: Calibri, sans-serif; margin: 2cm; line-height: 1.15; }
+  .page { page-break-after: always; }
+  p { margin: 0; padding: 0; margin-bottom: 4pt; }
+  br { line-height: 1.15; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 8pt; }
+  td, th { border: 1px solid #ccc; padding: 4px 8px; }
+  th { background: #f0f0f0; font-weight: bold; }
+  h1 { font-size: 20pt; margin: 8pt 0 4pt 0; }
+  h2 { font-size: 16pt; margin: 6pt 0 4pt 0; }
+  h3 { font-size: 13pt; margin: 4pt 0 2pt 0; }
+  ul, ol { margin: 0; padding-left: 20pt; }
+  li { margin-bottom: 2pt; }
+</style></head><body>
+    """.trimIndent())
+        pages.forEachIndexed { i, html ->
+            sb.append("""<div class="page"><div class="page-num">Page ${i + 1}</div>$html</div>""")
+        }
+        sb.append("</body></html>")
+        return sb.toString()
+    }
+
+    // ─────────────────────────────────────────────────────────────
+// Save HTML to Downloads
+// ─────────────────────────────────────────────────────────────
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun saveHtmlToDownloads(context: Application, html: String): Boolean {
+        return try {
+            val filename = "converted_${System.currentTimeMillis()}.html"
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, filename)
+                put(MediaStore.Downloads.MIME_TYPE, "text/html")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+            val uri = context.contentResolver.insert(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return false
+            context.contentResolver.openOutputStream(uri)?.use { out ->
+                out.write(html.toByteArray(Charsets.UTF_8))
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("PdfToWord", "HTML save error", e)
+            false
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+// Convert HTML pages → DOCX and save to Downloads
+// ─────────────────────────────────────────────────────────────
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun saveDocxToDownloads(context: Application, pages: List<String>): String? {
+        return try {
+            val wordHtml = """
+            <html xmlns:o='urn:schemas-microsoft-com:office:office'
+                  xmlns:w='urn:schemas-microsoft-com:office:word'
+                  xmlns='http://www.w3.org/TR/REC-html40'>
+            <head>
+                <meta charset='UTF-8'>
+                <meta name=ProgId content=Word.Document>
+                <meta name=Generator content='Microsoft Word 14'>
+                <meta name=Originator content='Microsoft Word 14'>
+                <!--[if gte mso 9]>
+                <xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml>
+                <![endif]-->
+                <style>
+                  body { font-family: Calibri, serif; margin: 2cm; }
+                  .page { page-break-after: always; margin-bottom: 32px; padding: 24px; }
+                  table { border-collapse: collapse; width: 100%; }
+                  td, th { border: 1px solid #ccc; padding: 6px 10px; }
+                  th { background: #f0f0f0; font-weight: bold; }
+                  h1 { font-size: 24pt; }
+                  h2 { font-size: 18pt; }
+                  h3 { font-size: 14pt; }
+                  p  { font-size: 11pt; line-height: 1.5; }
+                </style>
+            </head>
+            <body>
+                ${pages.mapIndexed { i, page ->
+                "<div class='page'>$page</div>"
+            }.joinToString("\n")}
+            </body>
+            </html>
+        """.trimIndent()
+
+            val filename = "converted_${System.currentTimeMillis()}.doc"
+            val file = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                filename
+            )
+            file.writeText(wordHtml, Charsets.UTF_8)
+            file.absolutePath  // null means failed, path means success
+        } catch (e: Exception) {
+            Log.e("PdfToWord", "DOC save error", e)
+            null
+        }
+    }
+
 
     private suspend fun extractTextFromPdf(uri: Uri): String =
         withContext(Dispatchers.IO) {
@@ -271,6 +699,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ""
             }
         }
+
     fun startPolling() {
         if (pollingJob?.isActive == true) return
 
@@ -476,7 +905,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             try {
                 (aiClient as? LiteRtClient)?.resetConversation()
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
 
             aiClient = null
         }
@@ -507,14 +937,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val key = prefs.geminiKey.first()
                 if (key.isBlank()) null else GeminiClient(key, model)
             }
+
             model.startsWith("claude") -> {
                 val key = prefs.claudeKey.first()
                 if (key.isBlank()) null else ClaudeClient(key, model)
             }
+
             model.startsWith("gpt") || model.startsWith("o1") || model.startsWith("o3") -> {
                 val key = prefs.openAiKey.first()
                 if (key.isBlank()) null else OpenAiClient(key, model)
             }
+
             else -> null
         }
     }

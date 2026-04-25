@@ -1,9 +1,18 @@
 package com.sai8151.urlai.ai
 
 import android.content.Context
-import com.google.ai.edge.litertlm.*
+import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.Content
+import com.google.ai.edge.litertlm.Contents
+import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.ConversationConfig
+import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.Message
+import com.google.ai.edge.litertlm.SamplerConfig
 import com.sai8151.urlai.PreferencesManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 
 class LiteRtClient(
@@ -22,7 +31,7 @@ class LiteRtClient(
         private var engine: Engine? = null
         private var loadedModelPath: String? = null
         private var conversation: Conversation? = null
-
+        private var pdfConversionJob: Job? = null
         /**
          * EASY SWITCH
          *
@@ -65,6 +74,7 @@ class LiteRtClient(
                 val config = EngineConfig(
                     modelPath = modelPath,
                     backend = backend,
+                    visionBackend = Backend.CPU(),
                     cacheDir = context.cacheDir.absolutePath
                 )
 
@@ -198,6 +208,101 @@ class LiteRtClient(
             )
         }
     }
+    suspend fun chatWithImage(
+        systemPrompt: String,
+        imageBytes: ByteArray,
+        userMessage: String,
+        onToken: ((String) -> Unit)? = null
+    ): Triple<String, String?, PerfMetrics> = withContext(Dispatchers.Default) {
+        try {
+            val file = ModelManager.getModelFile(context)
+            if (!file.exists() || file.length() < 1_000_000_000) {
+                return@withContext Triple("Model not downloaded.", null, PerfMetrics(0.0, 0, 0))
+            }
+
+            val modelPath = file.absolutePath
+
+            if (engine == null || loadedModelPath != modelPath) {
+                engine?.close()
+                val backend = if (useGpu) Backend.GPU() else Backend.CPU()
+                val config = EngineConfig(
+                    modelPath = modelPath,
+                    backend = backend,
+                    visionBackend = Backend.CPU(),
+                    cacheDir = context.cacheDir.absolutePath
+                )
+                engine = Engine(config)
+                engine!!.initialize()
+                loadedModelPath = modelPath
+                conversation = null
+            }
+
+            // ✅ Close existing conversation before creating vision one
+            conversation?.close()
+            conversation = null
+
+            val imageConversation = engine!!.createConversation(
+                ConversationConfig(
+                    systemInstruction = Contents.of(systemPrompt),
+                    samplerConfig = SamplerConfig(
+                        topK = topK,
+                        topP = topP.toDouble(),
+                        temperature = temperature.toDouble()
+                    )
+                )
+            )
+
+            val message = Message.of(
+                Content.ImageBytes(imageBytes),
+                Content.Text(userMessage)
+            )
+
+            val responseBuilder = StringBuilder()
+            val startTime = System.currentTimeMillis()
+            var firstTokenTime: Long? = null
+            var tokenCount = 0
+
+            imageConversation.sendMessageAsync(message).collect { msg ->
+                val text = msg.toString()
+                if (text.isNotBlank()) {
+                    if (firstTokenTime == null) firstTokenTime = System.currentTimeMillis()
+                    responseBuilder.append(text)
+                    tokenCount++
+                    onToken?.invoke(text)
+                }
+            }
+
+            // ✅ Close vision conversation and restore regular conversation
+            imageConversation.close()
+            conversation = engine!!.createConversation(
+                ConversationConfig(
+                    systemInstruction = Contents.of(systemPrompt),
+                    samplerConfig = SamplerConfig(
+                        topK = topK,
+                        topP = topP.toDouble(),
+                        temperature = temperature.toDouble()
+                    )
+                )
+            )
+
+            val endTime = System.currentTimeMillis()
+            val firstLatency = firstTokenTime?.minus(startTime) ?: -1
+            val totalTime = endTime - startTime
+            val tps = if (totalTime > 0) tokenCount * 1000.0 / totalTime else 0.0
+
+            Triple(
+                responseBuilder.toString(),
+                "⚡ ${"%.2f".format(tps)} t/s  ⏱ ${firstLatency}ms  ⏳ ${totalTime}ms",
+                PerfMetrics(tps, firstLatency, totalTime)
+            )
+        } catch (e: Exception) {
+            // ✅ On error, also clean up so next call doesn't inherit broken state
+            conversation?.close()
+            conversation = null
+            Triple("LiteRT Vision Error: ${e.message}", null, PerfMetrics(0.0, -1, 0))
+        }
+    }
+
 
     fun resetConversation() {
         conversation?.close()

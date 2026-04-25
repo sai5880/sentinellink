@@ -1,6 +1,7 @@
 package com.sai8151.urlai
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -16,6 +17,8 @@ import com.sai8151.urlai.databinding.ActivityMainBinding
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
+
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
@@ -24,10 +27,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: ChatAdapter
     private lateinit var convAdapter: ConversationAdapter
     private lateinit var storage: ConversationStorage
+    private lateinit var pdfToWordLauncher: ActivityResultLauncher<Array<String>>
+
     private lateinit var pdfPickerLauncher: ActivityResultLauncher<Array<String>>
     private var isSending = false
     private var isActionPopupVisible = false
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -87,7 +93,31 @@ class MainActivity : AppCompatActivity() {
             pdfPickerLauncher.launch(arrayOf("application/pdf"))
             closeActionPopup()
         }
+        binding.btnconvertpdftoword.setOnClickListener {
+            pdfToWordLauncher.launch(arrayOf("application/pdf"))
+            closeActionPopup()
+        }
+        pdfToWordLauncher = registerForActivityResult(
+            ActivityResultContracts.OpenDocument()
+        ) { uri ->
 
+            if (uri != null) {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+
+                Toast.makeText(
+                    this,
+                    "PDF Selected: $uri",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                lifecycleScope.launch {
+                    viewModel.handlePdfToWordImport(uri)
+                }
+            }
+        }
         binding.rvConversations.layoutManager =
             LinearLayoutManager(this)
 

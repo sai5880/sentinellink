@@ -13,8 +13,8 @@ android {
         applicationId = "com.sai8151.urlai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.9"
+        versionCode = 12
+        versionName = "1.10.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -58,7 +58,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
-
+    implementation(libs.poi.ooxml)
     implementation(libs.androidx.datastore.core.android)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.pdfbox.android)
@@ -66,7 +66,7 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.recyclerview)
     implementation(libs.androidx.coordinatorlayout)
-
+    implementation(libs.jsoup)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx.v287)
