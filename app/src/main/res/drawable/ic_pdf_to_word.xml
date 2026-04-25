@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Document -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M6,2h8l4,4v14a2,2 0 0 1 -2,2H6a2,2 0 0 1 -2,-2V4a2,2 0 0 1 2,-2z"/>
+
+    <!-- Fold corner -->
+    <path
+        android:fillColor="#DDDDDD"
+        android:pathData="M14,2v4h4"/>
+
+    <!-- Arrow indicating conversion -->
+    <path
+        android:fillColor="#2196F3"
+        android:pathData="M8,14h5v-2l4,3-4,3v-2H8z"/>
+
+</vector>
