@@ -13,8 +13,8 @@ android {
         applicationId = "com.sai8151.urlai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.10.1"
+        versionCode = 14
+        versionName = "1.10.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
