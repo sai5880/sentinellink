@@ -65,16 +65,17 @@ class LiteRtClient(
             if (engine == null || loadedModelPath != modelPath) {
                 engine?.close()
 
-                val backend = if (useGpu) {
+                val backend = if (useGpu) Backend.GPU() else Backend.CPU()
+
+                val visionBackend = if (useGpu) {
                     Backend.GPU()
                 } else {
                     Backend.CPU()
                 }
-
                 val config = EngineConfig(
                     modelPath = modelPath,
                     backend = backend,
-                    visionBackend = Backend.CPU(),
+                    visionBackend = visionBackend,
                     cacheDir = context.cacheDir.absolutePath
                 )
 

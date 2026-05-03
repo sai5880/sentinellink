@@ -6,17 +6,18 @@ import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import com.sai8151.urlai.ai.LocalModelRegistry
-import com.sai8151.urlai.databinding.ActivitySettingsBinding
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
+import androidx.lifecycle.repeatOnLifecycle
 import com.sai8151.urlai.ai.DeviceRecommender
+import com.sai8151.urlai.ai.LocalModelRegistry
 import com.sai8151.urlai.ai.ModelManager
 import com.sai8151.urlai.ai.PerfMetrics
-import android.graphics.Color
+import com.sai8151.urlai.databinding.ActivitySettingsBinding
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
-import androidx.core.view.WindowInsetsControllerCompat
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySettingsBinding
@@ -55,7 +56,24 @@ class SettingsActivity : AppCompatActivity() {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
 
+                launch {
+                    prefs.useGpu.collectLatest { value ->
+                        if (binding.switchGpu.isChecked != value) {
+                            binding.switchGpu.isChecked = value
+                        }
+                    }
+                }
+
+            }
+        }
+        binding.switchGpu.setOnCheckedChangeListener { _, isChecked ->
+            lifecycleScope.launch {
+                prefs.saveUseGpu(isChecked) // <-- use granular save
+            }
+        }
         // Download button
         binding.btnDownloadModel.setOnClickListener {
             binding.progressDownload.visibility = View.VISIBLE

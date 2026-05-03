@@ -2,7 +2,13 @@ package com.sai8151.urlai
 
 import android.content.Context
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.*
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -93,5 +99,10 @@ class PreferencesManager(private val context: Context) {
     }
     suspend fun saveSelectedModel(model: String) {
         context.dataStore.edit { it[KEY_SELECTED_MODEL] = model }
+    }
+    suspend fun saveUseGpu(value: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_USE_GPU] = value
+        }
     }
 }
