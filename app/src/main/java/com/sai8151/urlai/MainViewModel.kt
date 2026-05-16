@@ -12,6 +12,7 @@ import android.provider.MediaStore
 import android.util.Base64
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.core.graphics.createBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -262,6 +263,98 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     @RequiresApi(Build.VERSION_CODES.Q)
+//    suspend fun handlePdfToWordImport(uri: Uri) {
+//        try {
+//            if (currentConversationId == null) {
+//                currentConversationId = System.currentTimeMillis().toString()
+//            }
+//
+//            withContext(Dispatchers.Main) {
+//                _status.value = "Processing PDF..."
+//                // Post initial status bubble into chat
+//                addMessage(ChatMessage("assistant", "📄 Starting PDF conversion..."))
+//            }
+//
+//            val context = getApplication<Application>()
+//            val model = prefs.selectedModel.first()
+//            val isLocal = LocalModelRegistry.isLocalModel(model)
+//
+//            if (aiClient == null) {
+//                aiClient = buildClient(model)
+//            }
+//
+//            if (aiClient == null) {
+//                updateLastMessage("No valid AI client. Check settings.")
+//                return
+//            }
+//
+//            val tempFile = File(context.cacheDir, "pdf_temp_${System.currentTimeMillis()}.pdf")
+//            withContext(Dispatchers.IO) {
+//                context.contentResolver.openInputStream(uri)?.use { input ->
+//                    tempFile.outputStream().use { output -> input.copyTo(output) }
+//                }
+//            }
+//
+//            val pageCount = withContext(Dispatchers.IO) {
+//                val pfd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY)
+//                val renderer = PdfRenderer(pfd)
+//                val count = renderer.pageCount
+//                renderer.close()
+//                pfd.close()
+//                count
+//            }
+//
+//            updateLastMessage("Found **$pageCount pages**. Converting page by page...")
+//
+//            val allPageHtmls = mutableListOf<String>()
+//
+//            for (pageIndex in 0 until pageCount) {
+//                val pageNum = pageIndex + 1
+//
+//                // Update the same bubble with current progress
+//                val progress = buildProgressMessage(pageNum, pageCount, allPageHtmls.size)
+//                updateLastMessage(progress)
+//
+//                val htmlChunk = withContext(Dispatchers.IO) {
+//                    if (isLocal) {
+//                        extractPageTextAndConvert(uri, pageIndex, pageNum)
+//                    } else {
+//                        renderPageAndConvertViaVision(tempFile, pageIndex, pageNum)
+//                    }
+//                }
+//
+//                allPageHtmls.add(htmlChunk)
+//            }
+//
+//            tempFile.delete()
+//
+//            updateLastMessage("\nAll $pageCount pages converted. Building files...")
+//
+//            val fullHtml = buildFullHtml(allPageHtmls)
+//            val htmlSaved = saveHtmlToDownloads(context, fullHtml)
+//            val docxSaved = saveDocxToDownloads(context, allPageHtmls)
+//
+//            val resultMsg = buildString {
+//                append("**PDF conversion complete!**\n\n")
+//                append("$pageCount pages processed\n")
+//                if (htmlSaved) append("HTML saved to Downloads\n")
+//                if (docxSaved != null) append("DOC saved to Downloads\n")
+//                if (!htmlSaved && docxSaved == null) append("Save failed — check storage permissions")
+//                if (docxSaved != null) append("\n[DOCX_PATH:$docxSaved]")
+//            }
+//
+//            withContext(Dispatchers.Main) {
+//                updateLastMessage(resultMsg)
+//                _status.value = "Done!"
+//            }
+//
+//        } catch (e: Exception) {
+//            updateLastMessage("PDF Conversion Error: ${e.message}")
+//            _status.postValue("Error")
+//            Log.e("PdfToWord", "Error", e)
+//        }
+//    }
+
     suspend fun handlePdfToWordImport(uri: Uri) {
         try {
             if (currentConversationId == null) {
@@ -270,7 +363,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             withContext(Dispatchers.Main) {
                 _status.value = "Processing PDF..."
-                // Post initial status bubble into chat
                 addMessage(ChatMessage("assistant", "📄 Starting PDF conversion..."))
             }
 
@@ -288,6 +380,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val tempFile = File(context.cacheDir, "pdf_temp_${System.currentTimeMillis()}.pdf")
+
             withContext(Dispatchers.IO) {
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     tempFile.outputStream().use { output -> input.copyTo(output) }
@@ -303,16 +396,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 count
             }
 
-            updateLastMessage("Found **$pageCount pages**. Converting page by page...")
+            updateLastMessage("Found **$pageCount pages**. Converting...")
 
             val allPageHtmls = mutableListOf<String>()
 
             for (pageIndex in 0 until pageCount) {
                 val pageNum = pageIndex + 1
 
-                // Update the same bubble with current progress
-                val progress = buildProgressMessage(pageNum, pageCount, allPageHtmls.size)
-                updateLastMessage(progress)
 
                 val htmlChunk = withContext(Dispatchers.IO) {
                     if (isLocal) {
@@ -322,12 +412,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                allPageHtmls.add(htmlChunk)
+                allPageHtmls.add(sanitizePage(htmlChunk))
+                val progress = buildProgressMessage(
+                    current = pageNum,
+                    total = pageCount,
+                    done = allPageHtmls.size
+                )
+                updateLastMessage(progress)
             }
 
             tempFile.delete()
 
-            updateLastMessage("\nAll $pageCount pages converted. Building files...")
+            updateLastMessage("Building final document...")
 
             val fullHtml = buildFullHtml(allPageHtmls)
             val htmlSaved = saveHtmlToDownloads(context, fullHtml)
@@ -370,18 +466,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         updated[lastIndex] = updated[lastIndex].copy(content = text)
         _chatMessages.postValue(updated)
     }
-    // ─────────────────────────────────────────────────────────────
-// LOCAL PATH: extract text for one page → ask LLM → get HTML
-// ─────────────────────────────────────────────────────────────
+
     private suspend fun extractPageTextAndConvert(
         uri: Uri,
         pageIndex: Int,
-        pageNum: Int
+        pageNum: Int,
     ): String {
         return try {
             val context = getApplication<Application>()
 
-            // Copy URI to temp file once
+            // Copy URI → temp file
             val tempFile = withContext(Dispatchers.IO) {
                 val file = File(context.cacheDir, "pdf_temp_${System.currentTimeMillis()}.pdf")
                 context.contentResolver.openInputStream(uri)?.use { input ->
@@ -395,12 +489,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val renderer = PdfRenderer(pfd)
                 val page = renderer.openPage(pageIndex)
 
-                val scale = minOf(1200f / page.width, 1200f / page.height, 2.0f)
-                val bitmap = Bitmap.createBitmap(
+                // 🔥 Higher quality render
+                val scale = 1.2f
+                val bitmap = createBitmap(
                     (page.width * scale).toInt(),
-                    (page.height * scale).toInt(),
-                    Bitmap.Config.ARGB_8888  // ← ARGB_8888 not RGB_565, required by vision encoder
+                    (page.height * scale).toInt()
                 )
+
                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                 page.close()
                 renderer.close()
@@ -408,58 +503,141 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 tempFile.delete()
 
                 val baos = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, baos)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, baos)
                 bitmap.recycle()
                 baos.toByteArray()
             }
 
             val prompt = """
-This is page $pageNum of a PDF document.
-Recreate this document EXACTLY as visually shown.
+CRITICAL TYPOGRAPHY RULES:
+- If any text looks darker/thicker → MUST wrap in <b>
+- If text is slanted → MUST wrap in <i>
+- If text has a line → MUST wrap in <u>
+- Headings MUST use:
+  <h1>, <h2>, <h3>
 
-Preserve:
-- exact table structure
-- borders
-- merged cells
-- text alignment
-- indentation
-- bold/italic
-- spacing
-- paragraph breaks
-- section hierarchy
-- line spacing
-- margins
-- page layout
-- headers
-- footers
-- signatures
-- underlines
-- stamps if visible
+- Titles MUST be bold and larger
 
-Output complete production-grade HTML with inline CSS (Full HTML + inline CSS).
+FAILURE TO APPLY STYLING IS INCORRECT OUTPUT.
 
-Do not simplify.
-Do not summarize.
-Do not infer missing text.
-Reconstruct exact visual layout.
+STRUCTURE RULES:
 
-Return only HTML body content.
-        """.trimIndent()
+- Each logical block MUST be separate <div>
+- DO NOT put all text in <p>
+- Use:
+  <h1>, <h2>, <p>, <ul>, <li>
 
-            val systemPrompt = "You are a precise document formatter. Output only valid inner HTML."
+- Paragraph spacing MUST be preserved using margin-bottom
+
+
+STRICT INSTRUCTIONS:
+
+1. Treat the image like a DESIGN, not text.
+
+2. Preserve ALL visual styling:
+- bold → <b> or font-weight:bold
+- italic → <i>
+- underline → <u>
+- colors → inline color styles
+- font size differences → use inline font-size
+- spacing → use margin/padding/line-height
+- alignment → left/center/right EXACTLY
+
+3. Paragraphs:
+- DO NOT merge lines
+- Maintain line breaks exactly
+- Use <p> or <div> with spacing
+
+4. Tables:
+- Exact structure
+- Preserve borders
+- Use rowspan/colspan
+- Maintain cell spacing
+
+6. Output ONLY:
+<div class="page">
+   ...fully styled content...
+</div>
+
+7. Use inline CSS when needed.
+
+8. DO NOT simplify or flatten layout.
+
+DIAGRAM INTERPRETATION (VERY IMPORTANT):
+
+If diagram is:
+- blurry
+- incomplete
+- handwritten and unclear
+- partially visible
+
+THEN:
+
+- DO NOT copy blindly
+- INFER the logical structure
+- Use domain knowledge to complete it
+- Fill missing connections if obvious
+
+OUTPUT RULE (MANDATORY):
+
+Convert diagram into Flowchart.js format:
+
+Example:
+<div class="flowchart">
+st=>start: Title
+op=>operation: Step
+cond=>condition: Decision?
+e=>end: End
+
+st->op->cond
+cond(yes)->e
+cond(no)->op
+</div>
+
+--------------------------------------
+
+QUALITY RULE:
+
+- Logical correctness > visual similarity
+- Simpler correct diagram > complex incorrect one
+- Always prefer hierarchy if unsure
+Think like you are rebuilding a PDF editor layout.
+"""
+
+            val systemPrompt = "You are a precise document layout reconstruction engine."
 
             val liteRtClient = aiClient as? LiteRtClient
-                ?: return "<p><em>Page $pageNum: local model required for vision</em></p>"
+                ?: return """<div class="page"><p>Page $pageNum: local model required</p></div>"""
 
             val (html, _, _) = liteRtClient.chatWithImage(
-                systemPrompt = systemPrompt,
+                systemPrompt = systemPrompt+"Use flowchart.js for diagrams. js, script tag is added in head of html.",
                 imageBytes = imageBytes,
                 userMessage = prompt
             )
 
-            stripToBodyContent(html)
+//            val fixed = fixMermaidBlocks(closeBrokenPreTags(html))
+            val fixed = fixFlowchartSyntax(html)
+            sanitizePage(fixed)
+
         } catch (e: Exception) {
-            "<p><em>Page $pageNum error: ${e.message}</em></p>"
+            """<div class="page"><p>Page $pageNum error: ${e.message}</p></div>"""
+        }
+    }
+
+    private fun sanitizePage(html: String): String {
+        val divStart = html.indexOf("<div")
+        val divEnd = html.lastIndexOf("</div>")
+
+        val cleaned = if (divStart != -1 && divEnd != -1) {
+            html.substring(divStart, divEnd + 6)
+        } else {
+            html
+        }
+
+        return if (!cleaned.contains("class=\"page\"")) {
+            """<div class="page">$cleaned</div>"""
+        } else {
+            cleaned
         }
     }
     // ─────────────────────────────────────────────────────────────
@@ -496,41 +674,135 @@ Return only HTML body content.
             }
 
             val prompt = """
-            This is page $pageNum of a PDF document rendered as an image.
-            Recreate this document EXACTLY as visually shown.
+CRITICAL TYPOGRAPHY RULES:
+- If any text looks darker/thicker → MUST wrap in <b>
+- If text is slanted → MUST wrap in <i>
+- If text has a line → MUST wrap in <u>
+- Headings MUST use:
+  <h1>, <h2>, <h3>
 
-Preserve:
-- exact table structure
-- borders
-- merged cells
-- text alignment
-- indentation
-- bold/italic
-- spacing
-- paragraph breaks
-- section hierarchy
-- line spacing
-- margins
-- page layout
-- headers
-- footers
-- signatures
-- underlines
-- stamps if visible
-- always give paragraphs as justified
+- Titles MUST be bold and larger
 
-Output complete production-grade HTML with inline CSS (Full HTML + inline CSS).
+FAILURE TO APPLY STYLING IS INCORRECT OUTPUT.
 
-Do not simplify.
-Do not summarize.
-Do not infer missing text.
-Reconstruct exact visual layout.
+STRUCTURE RULES:
 
-Return only HTML body content.
+- Each logical block MUST be separate <div>
+- DO NOT put all text in <p>
+- Use:
+  <h1>, <h2>, <p>, <ul>, <li>
+
+- Paragraph spacing MUST be preserved using margin-bottom
+
+
+STRICT INSTRUCTIONS:
+
+1. Treat the image like a DESIGN, not text.
+
+2. Preserve ALL visual styling:
+- bold → <b> or font-weight:bold
+- italic → <i>
+- underline → <u>
+- colors → inline color styles
+- font size differences → use inline font-size
+- spacing → use margin/padding/line-height
+- alignment → left/center/right EXACTLY
+
+3. Paragraphs:
+- DO NOT merge lines
+- Maintain line breaks exactly
+- Use <p> or <div> with spacing
+
+4. Tables:
+- Exact structure
+- Preserve borders
+- Use rowspan/colspan
+- Maintain cell spacing
+
+5. Handwritten content:
+- Keep as-is text
+- Preserve spacing
+
+6. Layout is MORE IMPORTANT than text accuracy.
+
+7. Output ONLY:
+<div class="page">
+   ...fully styled content...
+</div>
+
+8. Use inline CSS when needed.
+
+9. DO NOT simplify or flatten layout.
+
+DIAGRAM INTERPRETATION MODE (VERY IMPORTANT):
+
+You must decide between TWO modes:
+
+--------------------------------------
+MODE 1: EXACT RECONSTRUCTION
+--------------------------------------
+If diagram is CLEAR and readable:
+- reproduce structure exactly
+- preserve all nodes and relationships
+
+--------------------------------------
+MODE 2: INTELLIGENT RECONSTRUCTION
+--------------------------------------
+If diagram is:
+- blurry
+- incomplete
+- handwritten and unclear
+- partially visible
+
+THEN:
+
+- DO NOT copy blindly
+- INFER the logical structure
+- Use domain knowledge to complete it
+- Fill missing connections if obvious
+
+--------------------------------------
+
+DETECTION RULE:
+
+If you see ANY of these:
+- boxes
+- arrows
+- grouped labels
+- hierarchical structure
+- classification trees
+
+→ It IS a diagram
+
+--------------------------------------
+
+OUTPUT RULE (MANDATORY):
+
+Convert diagram into Flowchart.js format:
+
+<div class="flowchart">
+st=>start: Title
+op=>operation: Step
+cond=>condition: Decision?
+e=>end: End
+
+st->op->cond
+cond(yes)->e
+cond(no)->op
+</div>
+
+--------------------------------------
+
+QUALITY RULE:
+
+- Logical correctness > visual similarity
+- Simpler correct diagram > complex incorrect one
+- Always prefer hierarchy if unsure
+Think like you are rebuilding a PDF editor layout.
 IMAGE (base64 JPEG): data:image/jpeg;base64,$base64Image
-        """.trimIndent()
+""".trimIndent()
 
-            val systemPrompt = "You are a precise document formatter. Output only valid inner HTML."
+            val systemPrompt = "You are a precise document formatter. Output only valid inner HTML. <div class=\"flowchart\">(.*?)</div>"
 
             val (html, _, _) = aiClient!!.chat(
                 systemPrompt = systemPrompt,
@@ -568,35 +840,111 @@ IMAGE (base64 JPEG): data:image/jpeg;base64,$base64Image
             .trim()
     }
 
-    // ─────────────────────────────────────────────────────────────
-// Build complete HTML document
-// ─────────────────────────────────────────────────────────────
-    private fun buildFullHtml(pages: List<String>): String {
-        val sb = StringBuilder()
-        sb.append("""
-        <!DOCTYPE html><html><head><meta charset="UTF-8">
-        <style>
-  body { font-family: Calibri, sans-serif; margin: 2cm; line-height: 1.15; }
-  .page { page-break-after: always; }
-  p { margin: 0; padding: 0; margin-bottom: 4pt; }
-  br { line-height: 1.15; }
-  table { border-collapse: collapse; width: 100%; margin-bottom: 8pt; }
-  td, th { border: 1px solid #ccc; padding: 4px 8px; }
-  th { background: #f0f0f0; font-weight: bold; }
-  h1 { font-size: 20pt; margin: 8pt 0 4pt 0; }
-  h2 { font-size: 16pt; margin: 6pt 0 4pt 0; }
-  h3 { font-size: 13pt; margin: 4pt 0 2pt 0; }
-  ul, ol { margin: 0; padding-left: 20pt; }
-  li { margin-bottom: 2pt; }
-</style></head><body>
-    """.trimIndent())
-        pages.forEachIndexed { i, html ->
-            sb.append("""<div class="page"><div class="page-num">Page ${i + 1}</div>$html</div>""")
-        }
-        sb.append("</body></html>")
-        return sb.toString()
-    }
 
+    private fun buildFullHtml(pages: List<String>): String {
+        val safePages = pages.joinToString("\n") { sanitizePage(it) }
+
+        return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            @page {
+                size: A4;
+                margin: 0;
+            }
+
+            body {
+                margin: 0;
+                background: #e5e5e5;
+                font-family: "Times New Roman", serif;
+            }
+
+            .page {
+                width: 210mm;
+                height: 297mm;
+                margin: 10mm auto;
+                padding: 15mm;
+                background: white;
+                box-sizing: border-box;
+                page-break-after: always;
+                border: 1px solid #ccc;
+                position: relative;
+                overflow: hidden;
+            }
+
+            p {
+                margin: 0;
+                line-height: 1.4;
+                font-size: 14px;
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 5px;
+            }
+
+            td, th {
+                border: 1px solid black;
+                padding: 4px;
+                vertical-align: top;
+                font-size: 14px;
+            }
+
+            img {
+                max-width: 100%;
+                display: block;
+            }
+
+            .center { text-align: center; }
+            .right { text-align: right; }
+        </style>
+        <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+        <script>
+            mermaid.initialize({ startOnLoad: true });
+        </script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/flowchart/1.17.1/flowchart.min.js"></script>
+
+        <script>
+        document.querySelectorAll(".flowchart").forEach((el, i) => {
+            try {
+                var chart = flowchart.parse(el.innerText);
+                el.innerHTML = "";
+                chart.drawSVG(el);
+            } catch (e) {
+                console.error("Flowchart error:", e);
+            }
+        });
+        </script>
+    </head>
+    <body>
+        $safePages
+    </body>
+    </html>
+    """.trimIndent()
+    }
+    private fun fixFlowchartSyntax(html: String): String {
+        return html.replace(
+            Regex("""<div class="flowchart">(.*?)</div>""", RegexOption.DOT_MATCHES_ALL)
+        ) { match ->
+            val raw = match.groupValues[1]
+
+            val cleaned = raw
+                .replace("->>", "->")
+                .replace(Regex("""\s+"""), " ")
+                .replace(" ;", "\n")
+                .replace(";", "\n")
+                .lines()
+                .joinToString("\n") { it.trim() }
+                .trim()
+
+            """<div class="flowchart">
+$cleaned
+</div>"""
+        }
+    }
     // ─────────────────────────────────────────────────────────────
 // Save HTML to Downloads
 // ─────────────────────────────────────────────────────────────
