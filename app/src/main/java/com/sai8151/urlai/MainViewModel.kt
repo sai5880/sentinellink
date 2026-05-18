@@ -29,7 +29,6 @@ import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
@@ -74,7 +73,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearChat() {
         newSession()
 
-        // 🔥 generate ID ONCE for new chat
         currentConversationId = System.currentTimeMillis().toString()
 
         _chatMessages.value = listOf()
@@ -111,7 +109,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             messages = messages,
             timestamp = System.currentTimeMillis()
         )
-        Log.d("CHAT_DEBUG", "Saving ID: $id")
+//        Log.d("CHAT_DEBUG", "Saving ID: $id")
         storage.upsertConversation(conversation)
     }
 
@@ -120,7 +118,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val messages = _chatMessages.value ?: return
         if (messages.isEmpty()) return
 
-        // 🔥 use EXISTING ID (NOT NEW)
         val id = currentConversationId ?: System.currentTimeMillis().toString()
 
         val conversation = Conversation(
@@ -259,6 +256,204 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         } catch (e: Exception) {
             _status.postValue("PDF Error: ${e.message}")
+        }
+    }
+    suspend fun handlePrescriptionImport(uri: Uri) {
+
+        try {
+
+            if (currentConversationId == null) {
+                currentConversationId =
+                    System.currentTimeMillis().toString()
+            }
+
+            val model = prefs.selectedModel.first()
+
+            if (aiClient == null) {
+                aiClient = buildClient(model)
+            }
+
+            if (aiClient == null) {
+                _status.postValue("Invalid API key / model.")
+                return
+            }
+
+            val context = getApplication<Application>()
+
+            val isLocal =
+                LocalModelRegistry.isLocalModel(model)
+
+            withContext(Dispatchers.Main) {
+                _status.value = "Thinking..."
+
+                addMessage(
+                    ChatMessage(
+                        "user",
+                        "Extract prescription from uploaded image"
+                    )
+                )
+            }
+
+            val messages =
+                _chatMessages.value
+                    ?.toMutableList()
+                    ?: mutableListOf()
+
+            val aiIndex = messages.size
+
+            messages.add(
+                ChatMessage(
+                    "assistant",
+                    ""
+                )
+            )
+
+            _chatMessages.postValue(messages)
+
+            val imageBytes =
+                withContext(Dispatchers.IO) {
+
+                    context.contentResolver
+                        .openInputStream(uri)
+                        ?.readBytes()
+                        ?: ByteArray(0)
+                }
+
+            if (imageBytes.isEmpty()) {
+                _status.postValue("Failed to read image.")
+                return
+            }
+
+            val prompt = """
+Extract the medical prescription from this image.
+
+Return clean markdown.
+
+Include:
+- doctor
+- patient
+- medicines
+- dosage
+- duration
+- instructions
+- tests
+
+Never hallucinate unclear medicine names.
+Example format:
+
+# Medical Prescription
+
+## Doctor
+Dr. XYZ
+
+## Patient
+Patient Name
+
+## Medicines
+
+1. **Medicine Name**
+   - Dosage: 1 tablet
+   - Frequency: Twice daily
+   - Duration: 5 days
+
+## Notes
+
+- Take after food
+
+Do not wrap response inside triple backticks.
+Do not return escaped markdown.
+Do not return '\n' characters literally.
+        """.trimIndent()
+
+            val systemPrompt =
+                "You are a medical prescription extraction assistant."
+
+            val finalText =
+                if (isLocal) {
+
+                    val liteRtClient =
+                        aiClient as? LiteRtClient
+
+                    if (liteRtClient == null) {
+
+                        "Local vision model unavailable."
+
+                    } else {
+
+                        val (response, stats, metrics) =
+                            liteRtClient.chatWithImage(
+                                systemPrompt = systemPrompt,
+                                imageBytes = imageBytes,
+                                userMessage = prompt,
+                                onToken = null
+                            )
+
+                        response
+                    }
+
+                } else {
+
+                    val base64Image =
+                        Base64.encodeToString(
+                            imageBytes,
+                            Base64.NO_WRAP
+                        )
+
+                    val cloudPrompt = """
+$prompt
+
+IMAGE:
+data:image/jpeg;base64,$base64Image
+                """.trimIndent()
+
+                    val (response, stats, metrics) =
+                        aiClient!!.chat(
+                            systemPrompt = systemPrompt,
+                            history = emptyList(),
+                            userMessage = cloudPrompt,
+                            onToken = null
+                        )
+
+                    response
+                }
+
+            val updated =
+                _chatMessages.value
+                    ?.toMutableList()
+                    ?: mutableListOf()
+
+            val current = updated[aiIndex]
+//            Log.d("PRESCRIPTION_RAW", finalText)
+            updated[aiIndex] =
+                current.copy(
+                    content = finalText
+                )
+
+            withContext(Dispatchers.Main) {
+                _chatMessages.value = updated
+            }
+
+            conversationHistory.add(
+                ChatMessage(
+                    "user",
+                    "Extract prescription from uploaded image"
+                )
+            )
+
+            conversationHistory.add(
+                ChatMessage(
+                    "assistant",
+                    finalText
+                )
+            )
+
+            _status.postValue("Done")
+
+        } catch (e: Exception) {
+
+            _status.postValue(
+                "Prescription Error: ${e.message}"
+            )
         }
     }
     @RequiresApi(Build.VERSION_CODES.Q)
@@ -717,7 +912,6 @@ IMAGE (base64 JPEG): data:image/jpeg;base64,$base64Image
 
                 val model = prefs.selectedModel.first()
 
-                // ✅ Build client ONCE
                 if (aiClient == null) {
                     aiClient = buildClient(model)
                 }
@@ -828,7 +1022,6 @@ IMAGE (base64 JPEG): data:image/jpeg;base64,$base64Image
                         conversationHistory.add(ChatMessage("user", userMessage))
                         conversationHistory.add(ChatMessage("assistant", finalText))
 
-                        // ✅ SAFE AUTO-TUNE (NO OVERWRITE BUG)
                         if (aiClient?.isLocal() == true) {
 
                             val currentConfig = TunedConfig(
@@ -886,30 +1079,6 @@ IMAGE (base64 JPEG): data:image/jpeg;base64,$base64Image
         pollingJob = null
         _isPolling.value = false
         _status.value = "Stopped"
-    }
-
-    fun refreshChat() {
-        viewModelScope.launch {
-
-            pollingJob?.cancelAndJoin()
-            pollingJob = null
-
-            conversationHistory.clear()
-            lastContent = ""
-
-            withContext(Dispatchers.Main) {
-                _chatMessages.value = emptyList()
-                _status.value = "Chat refreshed. Press Start."
-                _isPolling.value = false
-            }
-
-            try {
-                (aiClient as? LiteRtClient)?.resetConversation()
-            } catch (_: Exception) {
-            }
-
-            aiClient = null
-        }
     }
 
     private fun addMessage(msg: ChatMessage) {

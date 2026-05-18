@@ -291,8 +291,13 @@ class LiteRtClient(
             val totalTime = endTime - startTime
             val tps = if (totalTime > 0) tokenCount * 1000.0 / totalTime else 0.0
 
+            val formatted =
+                restoreMarkdownFormatting(
+                    responseBuilder.toString()
+                )
+
             Triple(
-                responseBuilder.toString(),
+                formatted,
                 "⚡ ${"%.2f".format(tps)} t/s  ⏱ ${firstLatency}ms  ⏳ ${totalTime}ms",
                 PerfMetrics(tps, firstLatency, totalTime)
             )
@@ -304,7 +309,30 @@ class LiteRtClient(
         }
     }
 
+    private fun restoreMarkdownFormatting(text: String): String {
 
+        return text
+
+            // headings
+            .replace(Regex("(#\\s[^#\\n]+)##"), "$1\n\n##")
+
+            // heading before numbered list
+            .replace(Regex("(##\\s[^\\n]+)(\\d+\\.)"), "$1\n\n$2")
+
+            // numbered list spacing
+            .replace(Regex("(\\d+\\.\\s\\*\\*[^\\n]+\\*\\*)(-)"), "$1\n$2")
+
+            // bullets spacing
+            .replace(Regex("(-\\s[^-\\n]+)(-)"), "$1\n$2")
+
+            // notes section
+            .replace("## Notes-", "## Notes\n\n-")
+
+            // general heading spacing
+            .replace(Regex("(#\\s[^\\n]+)(##\\s)"), "$1\n\n$2")
+
+            .trim()
+    }
     fun resetConversation() {
         conversation?.close()
         conversation = null

@@ -8,7 +8,9 @@ import android.view.MenuItem
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
 import androidx.lifecycle.lifecycleScope
@@ -16,8 +18,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.sai8151.urlai.databinding.ActivityMainBinding
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.RequiresApi
 
 class MainActivity : AppCompatActivity() {
 
@@ -32,7 +32,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var pdfPickerLauncher: ActivityResultLauncher<Array<String>>
     private var isSending = false
     private var isActionPopupVisible = false
-
+    private lateinit var prescriptionImageLauncher: ActivityResultLauncher<String>
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,12 +89,36 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        prescriptionImageLauncher =
+            registerForActivityResult(
+                ActivityResultContracts.GetContent()
+            ) { uri ->
+
+                if (uri != null) {
+
+                    Toast.makeText(
+                        this,
+                        "Prescription Selected",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    lifecycleScope.launch {
+                        viewModel.handlePrescriptionImport(uri)
+                    }
+                }
+            }
         binding.btnImportPdf.setOnClickListener {
             pdfPickerLauncher.launch(arrayOf("application/pdf"))
             closeActionPopup()
         }
         binding.btnconvertpdftoword.setOnClickListener {
             pdfToWordLauncher.launch(arrayOf("application/pdf"))
+            closeActionPopup()
+        }
+        binding.btnPrescriptionExtract.setOnClickListener {
+
+            prescriptionImageLauncher.launch("image/*")
+
             closeActionPopup()
         }
         pdfToWordLauncher = registerForActivityResult(
